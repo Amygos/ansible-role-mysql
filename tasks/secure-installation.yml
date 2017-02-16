@@ -22,6 +22,22 @@
     mode: 0600
   when: mysql_user_name != mysql_root_username and (mysql_install_packages | bool or mysql_user_password_update)
 
+- block:
+  - name: Get random root temporary password
+    shell: "grep -r A\\ temporary\\ password\\ is\\ generated\\ for\\ root@localhost: /var/log/mysql.err   | awk '{print $NF}' | tr -d '\\n'"
+    register: mysql_57_random_password
+
+  - name: Set new root temporary password
+    shell: mysql --connect-expired-password --password={{ mysql_57_random_password.stdout | quote }} -NBe "ALTER USER 'root'@'localhost' IDENTIFIED BY 'MyNewPass4!';"
+
+  - name: Uninstall plugin validate_password
+    shell: mysql --connect-expired-password --password='MyNewPass4!' -NBe 'uninstall plugin validate_password;'
+
+  - name: Disable root password
+    shell: mysql --connect-expired-password --password='MyNewPass4!' -NBe "ALTER USER 'root'@'localhost' IDENTIFIED BY '';"
+  when: (mysql_install_packages | bool) and ('5.7.' in mysql_cli_version.stdout)
+
+
 - name: Disallow root login remotely
   command: 'mysql -NBe "{{ item }}"'
   with_items:
